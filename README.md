@@ -6,11 +6,11 @@ A collection of applied ML projects on biological data — starting with the [CZ
 
 | Project | Question | Status |
 |---|---|---|
-| [Split Strategies](projects/split-strategies.md) | Does cross-donor evaluation actually differ from a random split, for blood cell-type classification? | Active |
+| [Split Strategies](projects/split-strategies.md) | Does cross-donor evaluation actually differ from a random split? | Active |
 
 ## Docs & code
 
-- **`docs/`** — quick overview of the shared codebase (data fetching, QC, preprocessing, training). Start at [docs/README.md](docs/README.md).
+- **`docs/`** — quick overview of the shared codebase. Start at [docs/README.md](docs/README.md).
 - **`projects/`** — one file per project: motivation, method, results, future work.
 
 ## Setup
