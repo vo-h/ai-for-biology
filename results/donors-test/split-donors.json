@@ -1,0 +1,159 @@
+{
+  "macro_f1": 0.8467,
+  "weighted_f1": 0.9198,
+  "balanced_accuracy": 0.8374,
+  "per_class": {
+    "Axl+ dendritic cell, human": {
+      "f1": 0.9241,
+      "support": 83
+    },
+    "Be cell": {
+      "f1": 0.8626,
+      "support": 762
+    },
+    "CD14-low, CD16-positive monocyte": {
+      "f1": 0.9515,
+      "support": 8498
+    },
+    "CD14-positive, CD16-negative classical monocyte": {
+      "f1": 0.9869,
+      "support": 59342
+    },
+    "CD141-positive myeloid dendritic cell": {
+      "f1": 0.9806,
+      "support": 232
+    },
+    "CD16-negative, CD56-bright natural killer cell, human": {
+      "f1": 0.9488,
+      "support": 3911
+    },
+    "CD16-positive, CD56-dim natural killer cell, human": {
+      "f1": 0.9161,
+      "support": 22857
+    },
+    "CD1c-positive myeloid dendritic cell": {
+      "f1": 0.95,
+      "support": 2706
+    },
+    "CD4-positive, alpha-beta memory T cell": {
+      "f1": 0.6885,
+      "support": 910
+    },
+    "CD8-positive, alpha-beta memory T cell": {
+      "f1": 0.5388,
+      "support": 129
+    },
+    "CD8-positive, alpha-beta regulatory T cell": {
+      "f1": 0.5766,
+      "support": 197
+    },
+    "CD8aa(I) thymocyte": {
+      "f1": 0.4344,
+      "support": 79
+    },
+    "T cell": {
+      "f1": 0.9639,
+      "support": 2337
+    },
+    "basophil mast progenitor cell": {
+      "f1": 0.96,
+      "support": 13
+    },
+    "central memory CD4-positive, alpha-beta T cell": {
+      "f1": 0.7864,
+      "support": 22847
+    },
+    "central memory CD8-positive, alpha-beta T cell": {
+      "f1": 0.7119,
+      "support": 2415
+    },
+    "common lymphoid progenitor": {
+      "f1": 1.0,
+      "support": 41
+    },
+    "common myeloid progenitor": {
+      "f1": 0.9913,
+      "support": 57
+    },
+    "double negative thymocyte": {
+      "f1": 0.8643,
+      "support": 322
+    },
+    "effector memory CD4-positive, alpha-beta T cell": {
+      "f1": 0.8577,
+      "support": 18283
+    },
+    "effector memory CD8-positive, alpha-beta T cell": {
+      "f1": 0.9642,
+      "support": 33995
+    },
+    "erythrocyte": {
+      "f1": 0.9462,
+      "support": 236
+    },
+    "innate lymphoid cell": {
+      "f1": 0.9,
+      "support": 141
+    },
+    "intermediate monocyte": {
+      "f1": 0.7728,
+      "support": 3604
+    },
+    "mature gamma-delta T cell": {
+      "f1": 0.6825,
+      "support": 1943
+    },
+    "memory B cell": {
+      "f1": 0.9447,
+      "support": 3785
+    },
+    "memory CCR4-positive regulatory T cell": {
+      "f1": 0.6,
+      "support": 388
+    },
+    "memory regulatory T cell": {
+      "f1": 0.8898,
+      "support": 4467
+    },
+    "mucosal invariant T cell": {
+      "f1": 0.9271,
+      "support": 2656
+    },
+    "naive B cell": {
+      "f1": 0.9462,
+      "support": 19445
+    },
+    "naive regulatory T cell": {
+      "f1": 0.7215,
+      "support": 1578
+    },
+    "naive thymus-derived CD4-positive, alpha-beta T cell": {
+      "f1": 0.9611,
+      "support": 66883
+    },
+    "naive thymus-derived CD8-positive, alpha-beta T cell": {
+      "f1": 0.9729,
+      "support": 10562
+    },
+    "natural killer cell": {
+      "f1": 0.2751,
+      "support": 4477
+    },
+    "plasma cell": {
+      "f1": 0.9968,
+      "support": 1080
+    },
+    "plasmacytoid dendritic cell": {
+      "f1": 0.993,
+      "support": 852
+    },
+    "platelet": {
+      "f1": 0.9841,
+      "support": 704
+    },
+    "transitional stage B cell": {
+      "f1": 0.8038,
+      "support": 4960
+    }
+  }
+}

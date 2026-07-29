@@ -1,0 +1,82 @@
+{
+  "hardware": {
+    "device": "mps",
+    "cpu_count": 8,
+    "torch_version": "2.13.0",
+    "python_version": "3.12.4",
+    "platform": "macOS-26.5.2-arm64-arm-64bit",
+    "hostname": "Hiens-MacBook-Pro.local",
+    "gpu_name": "Apple MPS"
+  },
+  "config": {
+    "tissues": [
+      "blood"
+    ],
+    "n_donors": 30,
+    "n_folds": 5,
+    "n_epochs": 5,
+    "batch_size": 512,
+    "lr": 0.001,
+    "weight_decay": 0.0001,
+    "io_batch_size": 65536,
+    "shuffle_chunk_size": 64,
+    "num_workers": 3,
+    "hidden_dims": [
+      512,
+      256
+    ],
+    "dropout": 0.3,
+    "output_dir": "results/random-spllit",
+    "census_version": "2025-11-08",
+    "data_dir": "results/donors",
+    "patience": null
+  },
+  "timing": {
+    "total_wall_time_s": 13496.5,
+    "total_train_time_s": 10063.0,
+    "total_cells_trained": 97381175,
+    "avg_cells_per_s": 9677.2,
+    "per_fold": [
+      {
+        "fold": 0,
+        "n_epochs": 5,
+        "train_time_s": 3288.2,
+        "total_train_cells": 19476235,
+        "avg_cells_per_s": 5923.1,
+        "avg_time_per_batch_s": 0.0863
+      },
+      {
+        "fold": 1,
+        "n_epochs": 5,
+        "train_time_s": 1621.1,
+        "total_train_cells": 19476235,
+        "avg_cells_per_s": 12014.2,
+        "avg_time_per_batch_s": 0.0425
+      },
+      {
+        "fold": 2,
+        "n_epochs": 5,
+        "train_time_s": 2050.7,
+        "total_train_cells": 19476235,
+        "avg_cells_per_s": 9497.4,
+        "avg_time_per_batch_s": 0.0538
+      },
+      {
+        "fold": 3,
+        "n_epochs": 5,
+        "train_time_s": 1680.9,
+        "total_train_cells": 19476235,
+        "avg_cells_per_s": 11586.8,
+        "avg_time_per_batch_s": 0.0441
+      },
+      {
+        "fold": 4,
+        "n_epochs": 5,
+        "train_time_s": 1422.1,
+        "total_train_cells": 19476235,
+        "avg_cells_per_s": 13695.4,
+        "avg_time_per_batch_s": 0.0373
+      }
+    ]
+  }
+}
