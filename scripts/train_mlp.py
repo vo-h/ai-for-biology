@@ -59,6 +59,10 @@ def parse_args():
                         "train and test. 'random': random cell-level split, "
                         "ignoring donor identity — the accuracy-inflation "
                         "baseline (see src.evaluation.cross_donor).")
+    p.add_argument("--patience", type=int, default=None,
+                   help="Stop a fold's training early after this many epochs "
+                        "without val macro-F1 improvement. Default: off, always "
+                        "runs the full --n-epochs.")
     return p.parse_args()
 
 
@@ -100,6 +104,7 @@ def main():
         output_dir=args.output_dir,
         census_version=args.census_version,
         data_dir=args.data_dir,
+        patience=args.patience,
     )
 
     results = run_training(hvg_genes=hvg_genes, cfg=cfg, split_fn=SPLIT_STRATEGIES[args.split_strategy])

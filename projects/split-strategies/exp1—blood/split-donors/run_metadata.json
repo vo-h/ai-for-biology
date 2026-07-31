@@ -1,0 +1,82 @@
+{
+  "hardware": {
+    "device": "mps",
+    "cpu_count": 8,
+    "torch_version": "2.13.0",
+    "python_version": "3.12.4",
+    "platform": "macOS-26.5.2-arm64-arm-64bit",
+    "hostname": "Hiens-MacBook-Pro.local",
+    "gpu_name": "Apple MPS"
+  },
+  "config": {
+    "tissues": [
+      "blood"
+    ],
+    "n_donors": 30,
+    "n_folds": 5,
+    "n_epochs": 50,
+    "batch_size": 512,
+    "lr": 0.001,
+    "weight_decay": 0.0001,
+    "io_batch_size": 65536,
+    "shuffle_chunk_size": 64,
+    "num_workers": 2,
+    "hidden_dims": [
+      512,
+      256
+    ],
+    "dropout": 0.3,
+    "output_dir": "projects/split-strategies/exp1\u2014blood/split-donors",
+    "census_version": "2025-11-08",
+    "data_dir": "projects/split-strategies/exp1\u2014blood/donors-train",
+    "patience": 5
+  },
+  "timing": {
+    "total_wall_time_s": 49811.0,
+    "total_train_time_s": 37422.8,
+    "total_cells_trained": 214202358,
+    "avg_cells_per_s": 5723.8,
+    "per_fold": [
+      {
+        "fold": 0,
+        "n_epochs": 17,
+        "train_time_s": 3551.3,
+        "total_train_cells": 66290310,
+        "avg_cells_per_s": 18666.5,
+        "avg_time_per_batch_s": 0.0274
+      },
+      {
+        "fold": 1,
+        "n_epochs": 7,
+        "train_time_s": 1715.7,
+        "total_train_cells": 27349784,
+        "avg_cells_per_s": 15940.9,
+        "avg_time_per_batch_s": 0.0321
+      },
+      {
+        "fold": 2,
+        "n_epochs": 8,
+        "train_time_s": 2072.0,
+        "total_train_cells": 31168784,
+        "avg_cells_per_s": 15042.8,
+        "avg_time_per_batch_s": 0.034
+      },
+      {
+        "fold": 3,
+        "n_epochs": 12,
+        "train_time_s": 26236.4,
+        "total_train_cells": 46607088,
+        "avg_cells_per_s": 1776.4,
+        "avg_time_per_batch_s": 0.2878
+      },
+      {
+        "fold": 4,
+        "n_epochs": 11,
+        "train_time_s": 3847.4,
+        "total_train_cells": 42786392,
+        "avg_cells_per_s": 11120.9,
+        "avg_time_per_batch_s": 0.046
+      }
+    ]
+  }
+}

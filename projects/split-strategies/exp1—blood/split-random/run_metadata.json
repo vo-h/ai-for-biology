@@ -1,0 +1,82 @@
+{
+  "hardware": {
+    "device": "mps",
+    "cpu_count": 8,
+    "torch_version": "2.13.0",
+    "python_version": "3.12.4",
+    "platform": "macOS-26.5.2-arm64-arm-64bit",
+    "hostname": "Hiens-MacBook-Pro.local",
+    "gpu_name": "Apple MPS"
+  },
+  "config": {
+    "tissues": [
+      "blood"
+    ],
+    "n_donors": 30,
+    "n_folds": 5,
+    "n_epochs": 50,
+    "batch_size": 512,
+    "lr": 0.001,
+    "weight_decay": 0.0001,
+    "io_batch_size": 65536,
+    "shuffle_chunk_size": 64,
+    "num_workers": 2,
+    "hidden_dims": [
+      512,
+      256
+    ],
+    "dropout": 0.3,
+    "output_dir": "projects/split-strategies/exp1\u2014blood/split-random",
+    "census_version": "2025-11-08",
+    "data_dir": "projects/split-strategies/exp1\u2014blood/donors-train",
+    "patience": 5
+  },
+  "timing": {
+    "total_wall_time_s": 38579.1,
+    "total_train_time_s": 30230.3,
+    "total_cells_trained": 362257971,
+    "avg_cells_per_s": 11983.3,
+    "per_fold": [
+      {
+        "fold": 0,
+        "n_epochs": 50,
+        "train_time_s": 16179.1,
+        "total_train_cells": 194762350,
+        "avg_cells_per_s": 12037.9,
+        "avg_time_per_batch_s": 0.0425
+      },
+      {
+        "fold": 1,
+        "n_epochs": 8,
+        "train_time_s": 3744.8,
+        "total_train_cells": 31161976,
+        "avg_cells_per_s": 8321.4,
+        "avg_time_per_batch_s": 0.0614
+      },
+      {
+        "fold": 2,
+        "n_epochs": 9,
+        "train_time_s": 2737.8,
+        "total_train_cells": 35057223,
+        "avg_cells_per_s": 12804.9,
+        "avg_time_per_batch_s": 0.0399
+      },
+      {
+        "fold": 3,
+        "n_epochs": 12,
+        "train_time_s": 3140.8,
+        "total_train_cells": 46742964,
+        "avg_cells_per_s": 14882.5,
+        "avg_time_per_batch_s": 0.0343
+      },
+      {
+        "fold": 4,
+        "n_epochs": 14,
+        "train_time_s": 4427.8,
+        "total_train_cells": 54533458,
+        "avg_cells_per_s": 12316.2,
+        "avg_time_per_batch_s": 0.0415
+      }
+    ]
+  }
+}

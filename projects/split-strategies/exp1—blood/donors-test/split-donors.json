@@ -1,158 +1,211 @@
 {
-  "macro_f1": 0.8469,
-  "weighted_f1": 0.9192,
-  "balanced_accuracy": 0.8417,
+  "n_models": 5,
+  "checkpoints": [
+    "best_model_fold0.pt",
+    "best_model_fold1.pt",
+    "best_model_fold2.pt",
+    "best_model_fold3.pt",
+    "best_model_fold4.pt"
+  ],
+  "mean": {
+    "macro_f1": 0.8340399999999999,
+    "weighted_f1": 0.91388,
+    "balanced_accuracy": 0.8346399999999999
+  },
+  "std": {
+    "macro_f1": 0.0033666600660001256,
+    "weighted_f1": 0.0009558242516278614,
+    "balanced_accuracy": 0.0037850231174987705
+  },
   "per_class": {
     "Axl+ dendritic cell, human": {
-      "f1": 0.9375,
+      "f1_mean": 0.9137,
+      "f1_std": 0.012,
       "support": 83
     },
     "Be cell": {
-      "f1": 0.8691,
+      "f1_mean": 0.8462,
+      "f1_std": 0.0068,
       "support": 762
     },
     "CD14-low, CD16-positive monocyte": {
-      "f1": 0.9525,
+      "f1_mean": 0.9495,
+      "f1_std": 0.0031,
       "support": 8498
     },
     "CD14-positive, CD16-negative classical monocyte": {
-      "f1": 0.9869,
+      "f1_mean": 0.9854,
+      "f1_std": 0.001,
       "support": 59342
     },
     "CD141-positive myeloid dendritic cell": {
-      "f1": 0.985,
+      "f1_mean": 0.9811,
+      "f1_std": 0.0034,
       "support": 232
     },
     "CD16-negative, CD56-bright natural killer cell, human": {
-      "f1": 0.9471,
+      "f1_mean": 0.9423,
+      "f1_std": 0.0023,
       "support": 3911
     },
     "CD16-positive, CD56-dim natural killer cell, human": {
-      "f1": 0.9175,
+      "f1_mean": 0.9151,
+      "f1_std": 0.0012,
       "support": 22857
     },
     "CD1c-positive myeloid dendritic cell": {
-      "f1": 0.9528,
+      "f1_mean": 0.9343,
+      "f1_std": 0.0157,
       "support": 2706
     },
     "CD4-positive, alpha-beta memory T cell": {
-      "f1": 0.6789,
+      "f1_mean": 0.6451,
+      "f1_std": 0.0118,
       "support": 910
     },
     "CD8-positive, alpha-beta memory T cell": {
-      "f1": 0.5714,
+      "f1_mean": 0.5721,
+      "f1_std": 0.0304,
       "support": 129
     },
     "CD8-positive, alpha-beta regulatory T cell": {
-      "f1": 0.5899,
+      "f1_mean": 0.5066,
+      "f1_std": 0.0827,
       "support": 197
     },
     "CD8aa(I) thymocyte": {
-      "f1": 0.4375,
+      "f1_mean": 0.4115,
+      "f1_std": 0.0193,
       "support": 79
     },
     "T cell": {
-      "f1": 0.9688,
+      "f1_mean": 0.953,
+      "f1_std": 0.01,
       "support": 2337
     },
     "basophil mast progenitor cell": {
-      "f1": 0.9167,
+      "f1_mean": 0.9326,
+      "f1_std": 0.0367,
       "support": 13
     },
     "central memory CD4-positive, alpha-beta T cell": {
-      "f1": 0.78,
+      "f1_mean": 0.7671,
+      "f1_std": 0.0047,
       "support": 22847
     },
     "central memory CD8-positive, alpha-beta T cell": {
-      "f1": 0.7265,
+      "f1_mean": 0.6909,
+      "f1_std": 0.0113,
       "support": 2415
     },
     "common lymphoid progenitor": {
-      "f1": 0.9877,
+      "f1_mean": 0.9951,
+      "f1_std": 0.006,
       "support": 41
     },
     "common myeloid progenitor": {
-      "f1": 0.9744,
+      "f1_mean": 0.9823,
+      "f1_std": 0.0058,
       "support": 57
     },
     "double negative thymocyte": {
-      "f1": 0.8443,
+      "f1_mean": 0.8424,
+      "f1_std": 0.0134,
       "support": 322
     },
     "effector memory CD4-positive, alpha-beta T cell": {
-      "f1": 0.86,
+      "f1_mean": 0.8498,
+      "f1_std": 0.0014,
       "support": 18283
     },
     "effector memory CD8-positive, alpha-beta T cell": {
-      "f1": 0.9649,
+      "f1_mean": 0.9598,
+      "f1_std": 0.0032,
       "support": 33995
     },
     "erythrocyte": {
-      "f1": 0.9483,
+      "f1_mean": 0.9306,
+      "f1_std": 0.0194,
       "support": 236
     },
     "innate lymphoid cell": {
-      "f1": 0.8897,
+      "f1_mean": 0.8853,
+      "f1_std": 0.0113,
       "support": 141
     },
     "intermediate monocyte": {
-      "f1": 0.7908,
+      "f1_mean": 0.7538,
+      "f1_std": 0.0047,
       "support": 3604
     },
     "mature gamma-delta T cell": {
-      "f1": 0.6696,
+      "f1_mean": 0.6486,
+      "f1_std": 0.0202,
       "support": 1943
     },
     "memory B cell": {
-      "f1": 0.9454,
+      "f1_mean": 0.9348,
+      "f1_std": 0.0053,
       "support": 3785
     },
     "memory CCR4-positive regulatory T cell": {
-      "f1": 0.6167,
+      "f1_mean": 0.5719,
+      "f1_std": 0.0159,
       "support": 388
     },
     "memory regulatory T cell": {
-      "f1": 0.8931,
+      "f1_mean": 0.8799,
+      "f1_std": 0.0017,
       "support": 4467
     },
     "mucosal invariant T cell": {
-      "f1": 0.9332,
+      "f1_mean": 0.9258,
+      "f1_std": 0.0059,
       "support": 2656
     },
     "naive B cell": {
-      "f1": 0.9461,
+      "f1_mean": 0.9406,
+      "f1_std": 0.0018,
       "support": 19445
     },
     "naive regulatory T cell": {
-      "f1": 0.7234,
+      "f1_mean": 0.7036,
+      "f1_std": 0.0094,
       "support": 1578
     },
     "naive thymus-derived CD4-positive, alpha-beta T cell": {
-      "f1": 0.9578,
+      "f1_mean": 0.9589,
+      "f1_std": 0.0013,
       "support": 66883
     },
     "naive thymus-derived CD8-positive, alpha-beta T cell": {
-      "f1": 0.9722,
+      "f1_mean": 0.9683,
+      "f1_std": 0.0004,
       "support": 10562
     },
     "natural killer cell": {
-      "f1": 0.2756,
+      "f1_mean": 0.2752,
+      "f1_std": 0.0175,
       "support": 4477
     },
     "plasma cell": {
-      "f1": 0.9968,
+      "f1_mean": 0.9969,
+      "f1_std": 0.0011,
       "support": 1080
     },
     "plasmacytoid dendritic cell": {
-      "f1": 0.9947,
+      "f1_mean": 0.9922,
+      "f1_std": 0.0009,
       "support": 852
     },
     "platelet": {
-      "f1": 0.9849,
+      "f1_mean": 0.9827,
+      "f1_std": 0.0008,
       "support": 704
     },
     "transitional stage B cell": {
-      "f1": 0.7953,
+      "f1_mean": 0.7683,
+      "f1_std": 0.0261,
       "support": 4960
     }
   }
