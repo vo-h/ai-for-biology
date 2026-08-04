@@ -14,7 +14,7 @@ Every cell shares the same genome but expresses different genes — that differe
   - **`donor`** (`group_k_fold_donors`) — disjoint donor groups per fold; no donor in both train and test.
   - **`random`** (`random_k_fold`) — random cell-level split; the same donor's cells can land in both train and test.
 - External check: all 5 fold-models per split, averaged (not cherry-picked), evaluated on 3 donors entirely outside the 30-donor training pool.
-- `src/evaluation/cross_donor.py`; run via `scripts/train_mlp.py --split-strategy {donor,random} --patience 5`; grouped external eval via `scripts/test_mlp.py --model-dir`.
+- `src/evaluation/cellxgene.py`; run via `scripts/cellxgene/train_mlp.py --split-strategy {donor,random} --patience 5`; grouped external eval via `scripts/cellxgene/test_mlp.py --model-dir`.
 
 ## Results
 
@@ -38,11 +38,11 @@ This runs counter to the common claim that random splits inflate accuracy by 10�
 ## Reproduce
 
 ```bash
-python scripts/download_dataset.py --tissues blood --n-donors 30 --output-dir results/donors --hvg-cache results/hvg.json
-python scripts/train_mlp.py --data-dir results/donors --split-strategy donor  --patience 5 --n-epochs 50 --output-dir results/split-donors
-python scripts/train_mlp.py --data-dir results/donors --split-strategy random --patience 5 --n-epochs 50 --output-dir results/split-random
-python scripts/test_mlp.py --model-dir results/split-donors --data-dir results/donors-test --fname split-donors.json
-python scripts/test_mlp.py --model-dir results/split-random --data-dir results/donors-test --fname split-random.json
+python scripts/cellxgene/download_dataset.py --tissues blood --n-donors 30 --output-dir results/donors --hvg-cache results/hvg.json
+python scripts/cellxgene/train_mlp.py --data-dir results/donors --split-strategy donor  --patience 5 --n-epochs 50 --output-dir results/split-donors
+python scripts/cellxgene/train_mlp.py --data-dir results/donors --split-strategy random --patience 5 --n-epochs 50 --output-dir results/split-random
+python scripts/cellxgene/test_mlp.py --model-dir results/split-donors --data-dir results/donors-test --fname split-donors.json
+python scripts/cellxgene/test_mlp.py --model-dir results/split-random --data-dir results/donors-test --fname split-random.json
 ```
 
 ## References

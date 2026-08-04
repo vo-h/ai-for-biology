@@ -24,11 +24,11 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from tiledbsoma_ml import experiment_dataloader
 
-from src.data.census import build_census_dataset, CensusCollateFn, fetch_metadata, SOMA_CTX, CENSUS_VERSION
-from src.data.local import LocalDonorDataset, list_available_donors
-from src.evaluation.metrics import macro_f1
-from src.data.preprocessing import get_label_encoder
-from src.evaluation.cross_donor import group_k_fold_donors
+from src.data.cellxgene import (
+    build_census_dataset, CensusCollateFn, fetch_metadata, get_label_encoder,
+    LocalDonorDataset, list_available_donors, SOMA_CTX, CENSUS_VERSION,
+)
+from src.evaluation.cellxgene import group_k_fold_donors, macro_f1
 from src.models.mlp import CellTypeMLP
 from src.training.callbacks import EarlyStopping
 from src.training.run_metadata import collect_hardware_info, save_run_metadata
@@ -134,7 +134,7 @@ def run_training(
     For each fold: train on N-1 donor groups → evaluate on held-out group.
     Returns a list of per-fold result dicts.
 
-    split_fn yields DonorSplit objects (see src.evaluation.cross_donor) and
+    split_fn yields DonorSplit objects (see src.evaluation.cellxgene) and
     defaults to group_k_fold_donors. Pass random_k_fold instead to get the
     random-split accuracy-inflation baseline from the same loop — donors can
     then overlap between train/test, which is exactly what's being measured.
@@ -184,7 +184,7 @@ def run_training(
     print(f"{len(meta):,} cells | {meta['donor_id'].nunique()} donors | {n_classes} classes")
 
     # Everything needed to reconstruct + correctly run this run's checkpoints
-    # later (scripts/test_mlp.py) — a .pt file is just a raw state_dict, with
+    # later (scripts/cellxgene/test_mlp.py) — a .pt file is just a raw state_dict, with
     # no record of architecture, label mapping, or gene identity/order on its
     # own, and CellTypeMLP's input is purely positional (a Linear layer), so
     # a silent gene mismatch at eval time would produce plausible-looking

@@ -4,11 +4,11 @@ Train the MLP cell-type classifier with out-of-core, cross-donor evaluation.
 
 Data never fully materialises in memory — streamed from Census S3 via
 tiledbsoma_ml's ExperimentDataset (shuffle-chunked, IO-batched, then
-mini-batched; see docs/census.md). DataLoader workers prefetch the next
+mini-batched; see docs/cellxgene.md). DataLoader workers prefetch the next
 IO batch while the GPU trains on the current one.
 
 Example:
-    python scripts/train_mlp.py \
+    python scripts/cellxgene/train_mlp.py \
         --tissues blood \
         --n-donors 30 \
         --n-epochs 10 \
@@ -22,11 +22,11 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from src.data.census import compute_hvg_list
-from src.evaluation.cross_donor import group_k_fold_donors, random_k_fold
-from src.training.trainer import TrainConfig, run_training
+from src.data.cellxgene import compute_hvg_list
+from src.evaluation.cellxgene import group_k_fold_donors, random_k_fold
+from src.training.cellxgene import TrainConfig, run_training
 
 SPLIT_STRATEGIES = {"donor": group_k_fold_donors, "random": random_k_fold}
 
@@ -51,14 +51,14 @@ def parse_args():
                    help="Path to a saved HVG list JSON (skips recomputation)")
     p.add_argument("--data-dir", type=Path, default=None,
                    help="Train from local per-donor h5ad files in this directory "
-                        "(see scripts/download_dataset.py) instead of streaming "
+                        "(see scripts/cellxgene/download_dataset.py) instead of streaming "
                         "live from Census. Skips HVG computation — the gene set "
                         "is whatever was downloaded.")
     p.add_argument("--split-strategy", choices=SPLIT_STRATEGIES, default="donor",
                    help="'donor' (default): cross-donor CV, no donor in both "
                         "train and test. 'random': random cell-level split, "
                         "ignoring donor identity — the accuracy-inflation "
-                        "baseline (see src.evaluation.cross_donor).")
+                        "baseline (see src.evaluation.cellxgene).")
     p.add_argument("--patience", type=int, default=None,
                    help="Stop a fold's training early after this many epochs "
                         "without val macro-F1 improvement. Default: off, always "

@@ -6,10 +6,10 @@ Each donor is fetched and written independently, so memory use is bounded by
 a single donor's slice — never the full requested population. All donor files
 share the same fixed HVG gene columns, in the same order, so they stay
 directly concatenable/comparable downstream (e.g. anndata.experimental
-.AnnCollection or concat_on_disk). See docs/census.md.
+.AnnCollection or concat_on_disk). See docs/cellxgene.md.
 
 Example:
-    python scripts/download_dataset.py \
+    python scripts/cellxgene/download_dataset.py \
         --tissues blood \
         --n-donors 10 \
         --hvg-cache results/hvg.json \
@@ -21,9 +21,9 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from src.data.census import compute_hvg_list, download_donor_h5ads, fetch_metadata
+from src.data.cellxgene import compute_hvg_list, download_donor_h5ads, fetch_metadata
 
 
 def parse_args():

@@ -13,13 +13,13 @@ rather than an error.
 
 Example:
     # Single checkpoint
-    python scripts/test_mlp.py \
+    python scripts/cellxgene/test_mlp.py \
         --model-path results/mlp/best_model_fold0.pt \
         --data-dir results/donors-test
 
     # A whole directory of checkpoints (e.g. all folds) — evaluates each and
     # reports the mean/std across the group, not just one cherry-picked model
-    python scripts/test_mlp.py \
+    python scripts/cellxgene/test_mlp.py \
         --model-dir results/mlp \
         --data-dir results/donors-test \
         --fname eval_all_folds.json
@@ -30,7 +30,7 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import anndata as ad
 import numpy as np
@@ -38,11 +38,10 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
-from src.data.census import CensusCollateFn
-from src.data.local import LocalDonorDataset, list_available_donors
-from src.evaluation.metrics import compute_metrics
+from src.data.cellxgene import CensusCollateFn, LocalDonorDataset, list_available_donors
+from src.evaluation.cellxgene import compute_metrics
 from src.models.mlp import CellTypeMLP
-from src.training.trainer import eval_epoch
+from src.training.cellxgene import eval_epoch
 
 
 def parse_args():
@@ -55,7 +54,7 @@ def parse_args():
                              "evaluates every *.pt in it and reports the mean/std across the group.")
     p.add_argument("--data-dir", type=Path, required=True,
                    help="Directory of per-donor h5ad files to evaluate on "
-                        "(see scripts/download_dataset.py)")
+                        "(see scripts/cellxgene/download_dataset.py)")
     p.add_argument("--model-config", type=Path, default=None,
                    help="Path to model_config.json (default: alongside --model-path, "
                         "or inside --model-dir)")
