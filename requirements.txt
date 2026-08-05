@@ -12,3 +12,5 @@ tqdm>=4.66.0
 torch>=2.2.0
 scikit-misc>=0.5.2
 tiledbsoma-ml>=0.1.0
+gcsfs>=2024.6.0
+pillow>=10.0.0
