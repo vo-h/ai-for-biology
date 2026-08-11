@@ -31,7 +31,7 @@ from src.data.cellxgene import (
 from src.evaluation.cellxgene import group_k_fold_donors, macro_f1
 from src.models.mlp import CellTypeMLP
 from src.training.callbacks import EarlyStopping
-from src.training.run_metadata import collect_hardware_info, save_run_metadata
+from src.training.metadata import collect_hardware_info, save_run_metadata
 
 
 @dataclass

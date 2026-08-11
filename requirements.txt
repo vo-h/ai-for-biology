@@ -14,3 +14,4 @@ scikit-misc>=0.5.2
 tiledbsoma-ml>=0.1.0
 gcsfs>=2024.6.0
 pillow>=10.0.0
+torchvision>=0.17.0

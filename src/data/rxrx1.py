@@ -42,6 +42,7 @@ RXRX1_BUCKET = "rxrx1-us-central1"
 N_SITES = 2
 N_CHANNELS = 6
 IMG_SIZE = 512
+N_SIRNA_CLASSES = 1108  # dense 0..1107, same panel applied across all 4 cell lines
 CHANNEL_NAMES = {
     1: "Hoechst (nucleus)",
     2: "ConA (endoplasmic reticulum)",
