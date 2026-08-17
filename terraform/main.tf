@@ -23,13 +23,24 @@ data "aws_ami" "ubuntu" {
 
 resource "aws_security_group" "census" {
   name        = "census-sg"
-  description = "SSH access for Census compute"
+  description = "SSH access for Census compute, plus inter-node traffic for multi-node DDP"
 
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # torchrun's rendezvous (c10d, TCP) and NCCL/gloo's own data-transfer
+  # connections both pick ports that aren't fully fixed in advance --
+  # self-referencing (only other members of this same security group, never
+  # the public internet) rather than trying to enumerate exact ports.
+  ingress {
+    from_port = 0
+    to_port   = 65535
+    protocol  = "tcp"
+    self      = true
   }
 
   egress {
@@ -41,6 +52,7 @@ resource "aws_security_group" "census" {
 }
 
 resource "aws_instance" "census" {
+  count                  = var.node_count
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
   key_name               = var.key_name
@@ -58,6 +70,6 @@ resource "aws_instance" "census" {
   EOF
 
   tags = {
-    Name = "census-compute"
+    Name = "census-compute-${count.index}"
   }
 }

@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import os
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import numpy as np
@@ -37,6 +37,8 @@ from src.data.rxrx1 import (
     worker_init_fn,
 )
 from src.models.resnet import RxRx1ResNet18
+from src.training.callbacks import EarlyStopping
+from src.training.metadata import collect_hardware_info
 
 
 @dataclass
@@ -56,6 +58,10 @@ class TrainConfig:
     limit: int | None = None
     """If set, only use the first `limit` metadata rows — for a quick smoke
     test of the DDP wiring rather than a real training run."""
+    patience: int | None = None
+    """If set, stop training early after this many epochs without val
+    accuracy improvement (see src.training.callbacks.EarlyStopping). None
+    (default) runs the full n_epochs."""
 
 
 # ---------------------------------------------------------------------------
@@ -206,6 +212,7 @@ def eval_epoch(
 def run_training(cfg: TrainConfig) -> None:
     rank, local_rank, world_size, device = setup_ddp()
     main = is_main_process()
+    run_start = time.time()
 
     if main:
         cfg.output_dir.mkdir(parents=True, exist_ok=True)
@@ -247,6 +254,16 @@ def run_training(cfg: TrainConfig) -> None:
         collate_fn=collate,
         worker_init_fn=worker_init_fn if cfg.num_workers > 0 else None,
         pin_memory=torch.cuda.is_available(),
+        # DataLoader workers are spawned lazily, on first iteration -- which
+        # happens inside train_epoch, after model.to(device)/DDP below have
+        # already initialized a CUDA context in this process. Linux's default
+        # "fork" start method would then fork *with* that context already
+        # live, which is a well-documented way to corrupt CUDA's
+        # driver-level state in the child -- observed as exactly this:
+        # DataLoader workers segfaulting on the very first batch. "spawn"
+        # gives each worker a fresh interpreter instead of a copy-on-write
+        # copy of the CUDA-initialized parent.
+        multiprocessing_context="spawn" if cfg.num_workers > 0 and torch.cuda.is_available() else None,
     )
     train_loader = DataLoader(train_ds, sampler=train_sampler, **loader_kwargs)
     val_loader = DataLoader(val_ds, sampler=val_sampler, **loader_kwargs)
@@ -267,7 +284,19 @@ def run_training(cfg: TrainConfig) -> None:
             "cell_types": cfg.cell_types,
             "channel_stats": channel_stats,
         }, indent=2))
+        # Hardware snapshot is rank-local (collect_hardware_info reads
+        # torch.cuda.current_device(), which set_device(local_rank) pointed
+        # at this rank's own GPU) -- fine for single-node --standalone runs,
+        # since every rank is on the same instance anyway. world_size/backend
+        # captured alongside it since collect_hardware_info doesn't know
+        # about the process group.
+        hardware = collect_hardware_info(device)
 
+    # One instance shared by every rank, not one per rank -- see the
+    # stopping check below for why that's required, not just tidy.
+    stopper = EarlyStopping(patience=cfg.patience, mode="max") if cfg.patience is not None else None
+
+    epoch_logs = []
     best_acc = 0.0
     for epoch in range(cfg.n_epochs):
         # Reshuffles differently each epoch while keeping every rank's
@@ -284,11 +313,52 @@ def run_training(cfg: TrainConfig) -> None:
             print(f"epoch {epoch}: train_loss={train_stats['loss']:.4f}  "
                   f"val_loss={val_stats['loss']:.4f}  val_acc={val_stats['accuracy']:.4f}  "
                   f"({train_stats['elapsed']:.1f}s, {train_stats['n_images']:,} images/rank)")
+            epoch_logs.append({
+                "epoch": epoch,
+                "train_loss": round(train_stats["loss"], 4),
+                "val_loss": round(val_stats["loss"], 4),
+                "val_accuracy": round(val_stats["accuracy"], 4),
+                "elapsed_s": round(train_stats["elapsed"], 1),
+                "train_images_per_rank": train_stats["n_images"],
+                "val_images_total": val_stats["n_images"],
+            })
             if val_stats["accuracy"] > best_acc:
                 best_acc = val_stats["accuracy"]
                 torch.save(model.state_dict(), cfg.output_dir / "best_model.pt")
 
+        # Every rank must decide to stop identically, or ranks desync: a
+        # rank that breaks early skips straight to cleanup_ddp() while the
+        # others enter another epoch expecting collectives (the all_reduce
+        # calls inside train_epoch/eval_epoch) that the departed rank never
+        # makes -- that hangs, not crashes. Safe here because val_stats
+        # ["accuracy"] is already all-reduced to the same value on every
+        # rank (see eval_epoch), so calling stopper.step() with it on every
+        # rank, not just main, produces the same True/False everywhere,
+        # with no extra synchronization needed.
+        if stopper is not None and stopper.step(val_stats["accuracy"], epoch):
+            if main:
+                print(f"  Early stopping at epoch {epoch} "
+                      f"(no val accuracy improvement for {cfg.patience} epochs)")
+            break
+
     if main:
         print(f"\nBest val accuracy: {best_acc:.4f}")
+        total_train_images = sum(e["train_images_per_rank"] for e in epoch_logs) * world_size
+        total_train_time = sum(e["elapsed_s"] for e in epoch_logs)
+        (cfg.output_dir / "run_metadata.json").write_text(json.dumps({
+            "hardware": hardware,
+            "world_size": world_size,
+            "backend": dist.get_backend(),
+            "config": asdict(cfg),
+            "best_val_accuracy": round(best_acc, 4),
+            "timing": {
+                "total_wall_time_s": round(time.time() - run_start, 1),
+                "total_train_time_s": round(total_train_time, 1),
+                "total_train_images": total_train_images,
+                "avg_images_per_s": round(total_train_images / total_train_time, 1) if total_train_time else None,
+                "per_epoch": epoch_logs,
+            },
+        }, indent=2, default=str))
+        print(f"Run metadata saved to {cfg.output_dir / 'run_metadata.json'}")
 
     cleanup_ddp()

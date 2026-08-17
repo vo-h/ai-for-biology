@@ -47,6 +47,10 @@ def parse_args():
     p.add_argument("--limit", type=int, default=None,
                    help="Only use the first N metadata rows -- for a quick smoke "
                         "test of the DDP wiring instead of a real training run.")
+    p.add_argument("--patience", type=int, default=None,
+                   help="Stop training early after this many epochs without val "
+                        "accuracy improvement. Default: off, always runs the full "
+                        "--n-epochs.")
     return p.parse_args()
 
 
@@ -64,6 +68,7 @@ def main():
         seed=args.seed,
         output_dir=args.output_dir,
         limit=args.limit,
+        patience=args.patience,
     )
     run_training(cfg)
 
