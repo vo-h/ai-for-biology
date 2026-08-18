@@ -13,6 +13,7 @@ inside DDP's backward() hook; nothing in this file does it by hand.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import time
@@ -25,6 +26,7 @@ import torch
 import torch.distributed as dist
 import torch.nn as nn
 from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.profiler import ProfilerActivity, profile as torch_profile, schedule as profiler_schedule, tensorboard_trace_handler
 from torch.utils.data import DataLoader, DistributedSampler
 from tqdm import tqdm
 
@@ -62,6 +64,15 @@ class TrainConfig:
     """If set, stop training early after this many epochs without val
     accuracy improvement (see src.training.callbacks.EarlyStopping). None
     (default) runs the full n_epochs."""
+    profile: bool = False
+    """If set, profile the first few training steps with torch.profiler and
+    write a Chrome-trace-format JSON per rank to <output_dir>/traces/ (via
+    tensorboard_trace_handler -- despite the name, these .pt.trace.json
+    files are plain Chrome trace format, viewable directly at
+    chrome://tracing or https://ui.perfetto.dev, no TensorBoard needed).
+    One file per rank (not just rank 0) -- DDP communication overhead
+    between ranks is exactly the kind of thing worth seeing, not just a
+    single process's view."""
 
 
 # ---------------------------------------------------------------------------
@@ -148,6 +159,7 @@ def train_epoch(
     optimizer: torch.optim.Optimizer,
     criterion: nn.Module,
     device: torch.device,
+    profiler=None,
 ) -> dict:
     model.train()
     total_loss, n_batches, n_images = 0.0, 0, 0
@@ -164,6 +176,11 @@ def train_epoch(
         n_batches += 1
         n_images += len(X)
         pbar.set_postfix(loss=f"{total_loss / n_batches:.4f}")
+        # No-op once the profiler's schedule(wait+warmup+active)*repeat
+        # window has passed -- cheap to call unconditionally for the rest
+        # of a long training run rather than tracking when to stop.
+        if profiler is not None:
+            profiler.step()
 
     elapsed = time.time() - t0
     return {
@@ -296,50 +313,74 @@ def run_training(cfg: TrainConfig) -> None:
     # stopping check below for why that's required, not just tidy.
     stopper = EarlyStopping(patience=cfg.patience, mode="max") if cfg.patience is not None else None
 
+    # wait=1 (skip the first, often-atypical step), warmup=1 (let the
+    # profiler's own instrumentation settle, discarded), active=3 (actually
+    # recorded), repeat=1 (one capture window, not one per epoch -- a long
+    # run doesn't need a fresh trace file every epoch, and each on_trace_ready
+    # call is itself not free). tensorboard_trace_handler names files
+    # "{hostname}_{pid}.{ts}.pt.trace.json" by default, so every rank writes
+    # its own without colliding -- worth keeping (not just profiling rank 0),
+    # since DDP communication overhead between ranks/nodes is exactly the
+    # kind of thing this project is about making visible.
+    profiler_ctx = (
+        torch_profile(
+            activities=[ProfilerActivity.CPU]
+            + ([ProfilerActivity.CUDA] if torch.cuda.is_available() else []),
+            schedule=profiler_schedule(wait=1, warmup=1, active=3, repeat=1),
+            on_trace_ready=tensorboard_trace_handler(str(cfg.output_dir / "traces")),
+            record_shapes=True,
+            profile_memory=True,
+            with_stack=True,
+        )
+        if cfg.profile
+        else contextlib.nullcontext()
+    )
+
     epoch_logs = []
     best_acc = 0.0
-    for epoch in range(cfg.n_epochs):
-        # Reshuffles differently each epoch while keeping every rank's
-        # shuffle in sync with the others -- without this, every rank would
-        # replay the exact same order every epoch (DistributedSampler seeds
-        # deterministically from `seed`, not from wall-clock state).
-        train_sampler.set_epoch(epoch)
+    with profiler_ctx as prof:
+        for epoch in range(cfg.n_epochs):
+            # Reshuffles differently each epoch while keeping every rank's
+            # shuffle in sync with the others -- without this, every rank would
+            # replay the exact same order every epoch (DistributedSampler seeds
+            # deterministically from `seed`, not from wall-clock state).
+            train_sampler.set_epoch(epoch)
 
-        train_stats = train_epoch(ddp_model, train_loader, optimizer, criterion, device)
-        val_stats = eval_epoch(ddp_model, val_loader, criterion, device)
-        scheduler.step()
+            train_stats = train_epoch(ddp_model, train_loader, optimizer, criterion, device, profiler=prof)
+            val_stats = eval_epoch(ddp_model, val_loader, criterion, device)
+            scheduler.step()
 
-        if main:
-            print(f"epoch {epoch}: train_loss={train_stats['loss']:.4f}  "
-                  f"val_loss={val_stats['loss']:.4f}  val_acc={val_stats['accuracy']:.4f}  "
-                  f"({train_stats['elapsed']:.1f}s, {train_stats['n_images']:,} images/rank)")
-            epoch_logs.append({
-                "epoch": epoch,
-                "train_loss": round(train_stats["loss"], 4),
-                "val_loss": round(val_stats["loss"], 4),
-                "val_accuracy": round(val_stats["accuracy"], 4),
-                "elapsed_s": round(train_stats["elapsed"], 1),
-                "train_images_per_rank": train_stats["n_images"],
-                "val_images_total": val_stats["n_images"],
-            })
-            if val_stats["accuracy"] > best_acc:
-                best_acc = val_stats["accuracy"]
-                torch.save(model.state_dict(), cfg.output_dir / "best_model.pt")
-
-        # Every rank must decide to stop identically, or ranks desync: a
-        # rank that breaks early skips straight to cleanup_ddp() while the
-        # others enter another epoch expecting collectives (the all_reduce
-        # calls inside train_epoch/eval_epoch) that the departed rank never
-        # makes -- that hangs, not crashes. Safe here because val_stats
-        # ["accuracy"] is already all-reduced to the same value on every
-        # rank (see eval_epoch), so calling stopper.step() with it on every
-        # rank, not just main, produces the same True/False everywhere,
-        # with no extra synchronization needed.
-        if stopper is not None and stopper.step(val_stats["accuracy"], epoch):
             if main:
-                print(f"  Early stopping at epoch {epoch} "
-                      f"(no val accuracy improvement for {cfg.patience} epochs)")
-            break
+                print(f"epoch {epoch}: train_loss={train_stats['loss']:.4f}  "
+                      f"val_loss={val_stats['loss']:.4f}  val_acc={val_stats['accuracy']:.4f}  "
+                      f"({train_stats['elapsed']:.1f}s, {train_stats['n_images']:,} images/rank)")
+                epoch_logs.append({
+                    "epoch": epoch,
+                    "train_loss": round(train_stats["loss"], 4),
+                    "val_loss": round(val_stats["loss"], 4),
+                    "val_accuracy": round(val_stats["accuracy"], 4),
+                    "elapsed_s": round(train_stats["elapsed"], 1),
+                    "train_images_per_rank": train_stats["n_images"],
+                    "val_images_total": val_stats["n_images"],
+                })
+                if val_stats["accuracy"] > best_acc:
+                    best_acc = val_stats["accuracy"]
+                    torch.save(model.state_dict(), cfg.output_dir / "best_model.pt")
+
+            # Every rank must decide to stop identically, or ranks desync: a
+            # rank that breaks early skips straight to cleanup_ddp() while the
+            # others enter another epoch expecting collectives (the all_reduce
+            # calls inside train_epoch/eval_epoch) that the departed rank never
+            # makes -- that hangs, not crashes. Safe here because val_stats
+            # ["accuracy"] is already all-reduced to the same value on every
+            # rank (see eval_epoch), so calling stopper.step() with it on every
+            # rank, not just main, produces the same True/False everywhere,
+            # with no extra synchronization needed.
+            if stopper is not None and stopper.step(val_stats["accuracy"], epoch):
+                if main:
+                    print(f"  Early stopping at epoch {epoch} "
+                          f"(no val accuracy improvement for {cfg.patience} epochs)")
+                break
 
     if main:
         print(f"\nBest val accuracy: {best_acc:.4f}")

@@ -64,6 +64,11 @@ resource "aws_instance" "census" {
 
   user_data = <<-EOF
     #!/bin/bash
+    set -e
+    # This AMI runs its own first-boot NVIDIA driver setup via cloud-init,
+    # which can hold the dpkg lock for a while after boot -- wait it out
+    # rather than let apt-get fail underneath us.
+    while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 1; done
     apt-get update -y
     apt-get install -y python3-pip python3-venv git libhdf5-dev pkg-config
     touch /home/ubuntu/ready

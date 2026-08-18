@@ -51,6 +51,11 @@ def parse_args():
                    help="Stop training early after this many epochs without val "
                         "accuracy improvement. Default: off, always runs the full "
                         "--n-epochs.")
+    p.add_argument("--profile", action="store_true",
+                   help="Profile the first few training steps with torch.profiler. "
+                        "Writes a Chrome-trace-format .pt.trace.json per rank to "
+                        "<output-dir>/traces/, viewable at chrome://tracing or "
+                        "https://ui.perfetto.dev.")
     return p.parse_args()
 
 
@@ -69,6 +74,7 @@ def main():
         output_dir=args.output_dir,
         limit=args.limit,
         patience=args.patience,
+        profile=args.profile,
     )
     run_training(cfg)
 

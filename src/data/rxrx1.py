@@ -20,6 +20,7 @@ from typing import Literal
 
 import io
 import os
+import warnings
 
 # grpc is an unused transitive dependency here (GCS reads go over plain HTTP
 # via aiohttp, not grpc) that still registers a fork handler on import. That
@@ -29,6 +30,17 @@ import os
 # (and grpc, transitively) is imported below; only silences grpc's own
 # logging, doesn't touch its actual fork-safety behavior.
 os.environ.setdefault("GRPC_VERBOSITY", "ERROR")
+
+# google-api-core warns on every one of its submodules imported under Python
+# 3.10 (google.api_core, google.cloud._storage_v2, google.cloud.storage_
+# control_v2 -- gcsfs pulls all three in transitively), so this fires
+# several times per process, once per spawned DataLoader worker on top of
+# that. Filtered by the module that actually calls warnings.warn(), not a
+# blanket FutureWarning ignore, so unrelated FutureWarnings elsewhere still
+# surface normally.
+warnings.filterwarnings(
+    "ignore", category=FutureWarning, module=r"google\.api_core\._python_version_support"
+)
 
 import gcsfs
 import numpy as np

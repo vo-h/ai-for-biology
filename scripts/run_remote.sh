@@ -25,10 +25,20 @@ set -euo pipefail
 #
 # --nodes N (default 1) provisions N identical instances instead of one --
 # for multi-node DDP, e.g. sidestepping a per-instance vCPU quota too low
-# for a single multi-GPU box. Streaming and results-pulling only ever target
-# node 0 -- that's where is_main_process()-gated prints and file writes
-# happen in this repo's training loops (see src/training/rxrx1.py), so other
-# nodes have nothing worth streaming.
+# for a single multi-GPU box. --node i (default 0, works with both launch
+# and --reattach) picks which node's log to stream -- node 0 is normally the
+# right one, since that's where is_main_process()-gated prints happen in
+# this repo's training loops (see src/training/rxrx1.py) and, as of the
+# --rdzv_backend=static fix below, is guaranteed to be global rank 0 for any
+# auto-filled torchrun command. Still useful for a bare command of your own
+# that assigns "main" differently, or to peek at a non-main node's log (e.g.
+# to debug a rendezvous hang).
+# Results-pulling, unlike streaming, covers every node regardless of --node:
+# per-rank artifacts like torch.profiler traces are written on whichever
+# node that rank lives on, not just node 0. Every node's results/ (including
+# node 0's) land under its own results/nodeN/ -- symmetric, no bare-results/
+# special case, so a node's folder is never just "missing" from the listing,
+# and no node's files can clobber another's of the same name.
 #
 # For a bare `torchrun ...` command, the rendezvous flags (--standalone for
 # one node; --nnodes/--node_rank/--rdzv_id/--rdzv_backend/--rdzv_endpoint
@@ -42,9 +52,10 @@ set -euo pipefail
 #
 # Usage:
 #   scripts/run_remote.sh --instance-type <type> [--name <run-name>] [--nodes N] [--confirm] -- <command...>
-#   scripts/run_remote.sh --reattach <run-name>
+#   scripts/run_remote.sh --reattach <run-name> [--node i]
 #   scripts/run_remote.sh --list
 #   scripts/run_remote.sh --pull-results
+#   scripts/run_remote.sh --wipe-results [--yes] [--force]
 #
 # Examples:
 #   scripts/run_remote.sh --instance-type g3.8xlarge --name rxrx1-ddp -- \
@@ -64,6 +75,7 @@ set -euo pipefail
 #   scripts/run_remote.sh --reattach rxrx1-ddp   # resume streaming after a Ctrl-C / dropped connection
 #   scripts/run_remote.sh --list                 # forgot the run name? list every run on the instance
 #   scripts/run_remote.sh --pull-results         # grab checkpoints/configs without touching the log stream
+#   scripts/run_remote.sh --wipe-results         # clean slate: delete results/ on every node before a fresh run
 #
 # Teardown is not this script's job -- when a run is done, `cd terraform &&
 # terraform destroy` stops billing. Destroying while a job is still running
@@ -136,7 +148,11 @@ run_name="run-$(date +%Y%m%d-%H%M%S)"
 reattach_name=""
 list_mode=0
 pull_mode=0
+wipe_mode=0
+wipe_force=0
+wipe_yes=0
 nodes=1
+stream_node=0
 tf_apply_flag="-auto-approve"
 remote_cmd=()
 
@@ -147,7 +163,11 @@ while [[ $# -gt 0 ]]; do
     --reattach) reattach_name="$2"; shift 2 ;;
     --list) list_mode=1; shift ;;
     --pull-results) pull_mode=1; shift ;;
+    --wipe-results) wipe_mode=1; shift ;;
+    --force) wipe_force=1; shift ;;
+    --yes) wipe_yes=1; shift ;;
     --nodes) nodes="$2"; shift 2 ;;
+    --node) stream_node="$2"; shift 2 ;;
     --confirm) tf_apply_flag=""; shift ;;
     --) shift; remote_cmd=("$@"); break ;;
     -h|--help)
@@ -168,16 +188,43 @@ fi
 
 IP=$(terraform -chdir="$REPO_ROOT/terraform" output -raw public_ip 2>/dev/null)
 
-# Pulls the whole remote results/ dir back (not just this run's slice) --
-# rsync'd wholesale, same as the original sync.sh, since this script doesn't
-# know where a given training command's --output-dir actually points (it's
-# just an opaque argument inside remote_cmd). Depends on $IP and
-# $REMOTE_HOME already being set by the caller.
+# Populates PUBLIC_IPS from terraform state. Errors suppressed (rather than
+# the unsuppressed version launch mode uses post-apply below) since this is
+# also called in pull/reattach mode, where terraform apply hasn't just run
+# in this invocation -- state should already have the output, but nothing
+# here needs to hard-fail if it doesn't. Falls back to the single already-
+# resolved $IP so pull/reattach still work for a single-node instance even
+# if the public_ips list output is somehow unavailable.
+fetch_public_ips() {
+  PUBLIC_IPS=()
+  while IFS= read -r line; do PUBLIC_IPS+=("$line"); done < <(
+    terraform -chdir="$REPO_ROOT/terraform" output -json public_ips 2>/dev/null \
+      | python3 -c 'import json,sys; print("\n".join(json.load(sys.stdin)))' 2>/dev/null
+  )
+  if [[ ${#PUBLIC_IPS[@]} -eq 0 && -n "$IP" ]]; then
+    PUBLIC_IPS=("$IP")
+  fi
+}
+
+# Pulls the whole remote results/ dir back from *every* node (not just this
+# run's slice) -- rsync'd wholesale, since this script doesn't know where a
+# given training command's --output-dir actually points (it's just an opaque
+# argument inside remote_cmd). Every node, including 0, lands under
+# results/nodeN/ -- no bare-results/-for-node-0 special case, so the local
+# tree is symmetric and a node's own folder is never just "missing" from the
+# listing. Depends on PUBLIC_IPS and $REMOTE_HOME already being set by the
+# caller.
 pull_results() {
-  echo
-  echo "==> Pulling results/ from $IP..."
-  rsync -av -e "$SSH_OPTS" "ubuntu@$IP:$REMOTE_HOME/ai-for-biology/results/" "$REPO_ROOT/results/" \
-    || echo "    (pull failed -- retry later with: scripts/run_remote.sh --pull-results)"
+  local idx ip dest
+  for idx in "${!PUBLIC_IPS[@]}"; do
+    ip="${PUBLIC_IPS[$idx]}"
+    dest="$REPO_ROOT/results/node$idx/"
+    mkdir -p "$dest"
+    echo
+    echo "==> Pulling results/ from node $idx ($ip)..."
+    rsync -av -e "$SSH_OPTS" "ubuntu@$ip:$REMOTE_HOME/ai-for-biology/results/" "$dest" \
+      || echo "    (pull from node $idx failed -- retry later with: scripts/run_remote.sh --pull-results)"
+  done
 }
 
 # --- Pull-results mode: grab checkpoints/configs on demand, independent of
@@ -188,8 +235,70 @@ if [[ "$pull_mode" == "1" ]]; then
     exit 1
   fi
   echo "==> Instance IP: $IP"
+  fetch_public_ips
   REMOTE_HOME=$($SSH_OPTS "ubuntu@$IP" 'echo $HOME')
   pull_results
+  exit 0
+fi
+
+# --- Wipe mode: clear every node's remote results/ for a clean slate before
+# a fresh run. Remote only -- local pulled copies (results/nodeN/) are left
+# alone; rm those yourself if you want them gone too. Refuses if any node
+# has a run still marked running (live pidfile) -- wiping out from under an
+# active job would silently discard whatever it's still writing -- pass
+# --force to wipe anyway (e.g. a pidfile stuck pointing at a dead pid).
+# Also asks for interactive confirmation unless --yes is given, since this
+# is real, hard-to-reverse data loss on the instance(s).
+if [[ "$wipe_mode" == "1" ]]; then
+  if [[ -z "$IP" ]]; then
+    echo "Error: no instance IP from terraform -- is one currently up?" >&2
+    exit 1
+  fi
+  fetch_public_ips
+
+  echo "==> Checking for running jobs on ${#PUBLIC_IPS[@]} node(s)..."
+  any_running=0
+  for idx in "${!PUBLIC_IPS[@]}"; do
+    node_ip="${PUBLIC_IPS[$idx]}"
+    # trailing `true` matters -- without it, the loop's last exit status is
+    # kill -0's (non-zero whenever the last checked pid is dead), which
+    # becomes this SSH command's exit status, which -- since running=$(...)
+    # is a plain assignment, not guarded by local -- trips set -e in *this*
+    # script and aborts before ever reaching the confirmation prompt.
+    running=$($SSH_OPTS "ubuntu@$node_ip" '
+      cd ai-for-biology/results 2>/dev/null || exit 0
+      shopt -s nullglob
+      for f in *.pid; do
+        kill -0 "$(cat "$f")" 2>/dev/null && echo "${f%.pid}"
+      done
+      true
+    ' 2>/dev/null)
+    if [[ -n "$running" ]]; then
+      echo "  node $idx ($node_ip): still running -- $running" >&2
+      any_running=1
+    fi
+  done
+  if [[ "$any_running" == "1" && "$wipe_force" != "1" ]]; then
+    echo "Error: refusing to wipe -- at least one run above is still active. Stop it first, or pass --force to wipe anyway." >&2
+    exit 1
+  fi
+
+  if [[ "$wipe_yes" != "1" ]]; then
+    echo "==> This will permanently delete results/ on: ${PUBLIC_IPS[*]}"
+    read -r -p "    Type 'yes' to confirm: " confirm_ans
+    if [[ "$confirm_ans" != "yes" ]]; then
+      echo "Aborted -- nothing wiped."
+      exit 1
+    fi
+  fi
+
+  for idx in "${!PUBLIC_IPS[@]}"; do
+    node_ip="${PUBLIC_IPS[$idx]}"
+    echo "==> Wiping results/ on node $idx ($node_ip)..."
+    $SSH_OPTS "ubuntu@$node_ip" 'rm -rf ai-for-biology/results && mkdir -p ai-for-biology/results' \
+      || echo "    (wipe failed on node $idx -- check connectivity and retry)"
+  done
+  echo "==> Done. Local copies (results/, results/nodeN/) untouched -- remove those yourself if wanted."
   exit 0
 fi
 
@@ -202,7 +311,12 @@ if [[ "$list_mode" == "1" ]]; then
   fi
   echo "==> Instance IP: $IP"
   REMOTE_HOME=$($SSH_OPTS "ubuntu@$IP" 'echo $HOME')
-  REMOTE_LOG_DIR="$REMOTE_HOME/ai-for-biology/results/logs"
+  # Flat, not results/logs/ -- a run's own bookkeeping (.log/.pid/.sh) lives
+  # directly under results/, alongside whatever project-namespaced subfolder
+  # the training script's own --output-dir creates (results/rxrx1/,
+  # results/mlp/, ...). No collision: those are always subdirectories, never
+  # bare files at this level, so *.log below only ever matches run logs.
+  REMOTE_LOG_DIR="$REMOTE_HOME/ai-for-biology/results"
   echo "==> Runs on $IP:"
   $SSH_OPTS "ubuntu@$IP" bash -s <<EOF
 cd "$REMOTE_LOG_DIR" 2>/dev/null || { echo "(no runs yet -- $REMOTE_LOG_DIR doesn't exist)"; exit 0; }
@@ -236,15 +350,32 @@ if [[ -n "$reattach_name" ]]; then
     echo "Error: no instance IP from terraform -- is one currently up? (terraform -chdir=terraform output public_ip)" >&2
     exit 1
   fi
-  echo "==> Instance IP: $IP"
-  REMOTE_HOME=$($SSH_OPTS "ubuntu@$IP" 'echo $HOME')
-  REMOTE_LOG="$REMOTE_HOME/ai-for-biology/results/logs/${reattach_name}.log"
-  LOCAL_LOG="$REPO_ROOT/results/logs/${reattach_name}.log"
-  mkdir -p "$REPO_ROOT/results/logs"
+  fetch_public_ips
+  # --node picks which node's log to stream (default 0) -- useful on its own
+  # for a multi-node run, and a workaround for a c10d-backend run already in
+  # flight before the --rdzv_backend=static fix, where global rank 0 (the
+  # only rank with anything to stream -- see is_main_process()-gated prints)
+  # could've landed on any node, not necessarily node 0.
+  if [[ "$stream_node" -ge "${#PUBLIC_IPS[@]}" ]]; then
+    echo "Error: --node $stream_node out of range -- only ${#PUBLIC_IPS[@]} node(s) up." >&2
+    exit 1
+  fi
+  STREAM_IP="${PUBLIC_IPS[$stream_node]}"
+  echo "==> Streaming from node $stream_node ($STREAM_IP)"
+  REMOTE_HOME=$($SSH_OPTS "ubuntu@$STREAM_IP" 'echo $HOME')
+  # Flat remote path (results/<name>.log, not results/logs/<name>.log -- see
+  # the matching comment in list mode above), and local destination follows
+  # the same results/nodeN/ convention pull_results() uses (every node,
+  # including 0), so a reattached log ends up wherever the rest of that
+  # node's results/ would land.
+  REMOTE_LOG="$REMOTE_HOME/ai-for-biology/results/${reattach_name}.log"
+  LOCAL_LOG_DIR="$REPO_ROOT/results/node$stream_node"
+  LOCAL_LOG="$LOCAL_LOG_DIR/${reattach_name}.log"
+  mkdir -p "$LOCAL_LOG_DIR"
 
-  echo "==> Reattaching: $REMOTE_LOG -> $LOCAL_LOG"
+  echo "==> Reattaching: $STREAM_IP:$REMOTE_LOG -> $LOCAL_LOG"
   echo "    Ctrl-C stops this local stream only -- the remote job keeps running."
-  echo "    Results (checkpoints/configs) get pulled automatically when this ends."
+  echo "    Results (checkpoints/configs) get pulled from every node automatically when this ends."
   echo
   # Results pulled on the way out regardless of *how* the stream ends
   # (Ctrl-C, dropped connection, or the pipe just returning) -- an EXIT trap
@@ -252,7 +383,7 @@ if [[ -n "$reattach_name" ]]; then
   trap pull_results EXIT
   # -n +1, not just -f, so the local log is the complete log from the start
   # every time, not just whatever's written after this particular attach.
-  $SSH_OPTS "ubuntu@$IP" "tail -f -n +1 '$REMOTE_LOG'" | tee "$LOCAL_LOG"
+  $SSH_OPTS "ubuntu@$STREAM_IP" "tail -f -n +1 '$REMOTE_LOG'" | tee "$LOCAL_LOG"
   exit 0
 fi
 
@@ -284,23 +415,30 @@ if [[ "${remote_cmd[0]}" == "torchrun" ]]; then
     if [[ "$nodes" -eq 1 ]]; then
       remote_cmd=("torchrun" "--standalone" "${remote_cmd[@]:1}")
     else
-      # Two separate, independently-configurable timeouts govern different
-      # phases -- confirmed by reading torch's own source
-      # (c10d_rendezvous_backend.py), not assumed:
-      #   read_timeout (default 60s) -- how long a worker's *initial* TCPStore
-      #     connection attempt gets before _create_tcp_store gives up outright
-      #     and raises RendezvousConnectionError. This is what actually killed
-      #     a real run: it crashed in ~2 minutes, nowhere near either 600s or
-      #     even the old join_timeout bump -- read_timeout was still at its
-      #     60s default.
-      #   join_timeout (default 600s) -- separately, how long the rendezvous
-      #     state machine waits for enough participants *after* the store
-      #     connection is already established.
-      # Both bumped for real headroom, not tuned reactively after each miss.
+      # rdzv_backend=static, not c10d -- confirmed by reading torch's own
+      # source (torch/distributed/run.py): c10d's rendezvous assigns global
+      # rank by *join order*, silently ignoring --node_rank entirely (it
+      # even warns "node_rank is only used for static rdzv_backend" -- easy
+      # to miss since it's not an error). Observed for real: with c10d,
+      # whichever node's process happened to check in first became global
+      # rank 0, not node 0 as --node_rank=0 implied -- so this script's
+      # streaming/pull-results (which always targets node 0's IP) silently
+      # watched the *wrong* node, one with nothing to show since
+      # is_main_process()-gated prints/tqdm/file-writes never fire on a
+      # non-zero rank. static's handler (static_tcp_rendezvous.py) reads the
+      # rank straight from --node_rank (run.py: `rdzv_configs["rank"] =
+      # args.node_rank`), so node 0 -- the one --rdzv_endpoint already points
+      # at -- is now guaranteed to be global rank 0.
+      #
+      # timeout (default 600s) is static's one config knob (unlike c10d's
+      # separate read_timeout/join_timeout) -- how long the initial TCPStore
+      # connection gets. Bumped for the same reason those were: real launch
+      # overhead from this script's own retry/timing on top of instance
+      # startup.
       remote_cmd=(
         "torchrun" "--nnodes=$nodes" "--node_rank={NODE_RANK}"
-        "--rdzv_id=$run_name" "--rdzv_backend=c10d" "--rdzv_endpoint={MASTER_ADDR}:29500"
-        "--rdzv_conf=join_timeout=1800,read_timeout=1800"
+        "--rdzv_id=$run_name" "--rdzv_backend=static" "--rdzv_endpoint={MASTER_ADDR}:29500"
+        "--rdzv_conf=timeout=1800"
         "${remote_cmd[@]:1}"
       )
     fi
@@ -321,10 +459,9 @@ echo "==> Node 0 IP: $IP"
 # Full per-node IP lists -- fetched unconditionally (not just when nodes>1)
 # so the sync/venv/launch steps below are one code path, a loop of 1 in the
 # common single-node case, rather than a branch duplicating that logic.
-PUBLIC_IPS=()
-while IFS= read -r line; do PUBLIC_IPS+=("$line"); done < <(
-  terraform -chdir="$REPO_ROOT/terraform" output -json public_ips | python3 -c 'import json,sys; print("\n".join(json.load(sys.stdin)))'
-)
+# Re-fetches (overwriting whatever the pre-apply call near the top of the
+# script saw) since apply above may have just changed the instance set.
+fetch_public_ips
 PRIVATE_IPS=()
 while IFS= read -r line; do PRIVATE_IPS+=("$line"); done < <(
   terraform -chdir="$REPO_ROOT/terraform" output -json private_ips | python3 -c 'import json,sys; print("\n".join(json.load(sys.stdin)))'
@@ -363,11 +500,14 @@ echo "    All node(s) ready."
 # bug entirely, for every command below.
 REMOTE_HOME=$($SSH_OPTS "ubuntu@$IP" 'echo $HOME')
 REMOTE_REPO="$REMOTE_HOME/ai-for-biology"
-REMOTE_LOG_DIR="$REMOTE_REPO/results/logs"
+# Flat, not results/logs/ -- see the matching comment in list mode above.
+REMOTE_LOG_DIR="$REMOTE_REPO/results"
 REMOTE_LOG="$REMOTE_LOG_DIR/${run_name}.log"
 REMOTE_PIDFILE="$REMOTE_LOG_DIR/${run_name}.pid"
 REMOTE_RUNNER="$REMOTE_LOG_DIR/${run_name}.sh"
-LOCAL_LOG_DIR="$REPO_ROOT/results/logs"
+# Local destination for whichever node ends up streamed follows the same
+# results/nodeN/ convention pull_results() uses (every node, including 0).
+LOCAL_LOG_DIR="$REPO_ROOT/results/node$stream_node"
 LOCAL_LOG="$LOCAL_LOG_DIR/${run_name}.log"
 mkdir -p "$LOCAL_LOG_DIR"
 
@@ -390,11 +530,20 @@ setup_venv_on_node() {
 set -e
 mkdir -p "$REMOTE_LOG_DIR"
 cd "$REMOTE_REPO"
+# Don't just trust that the /home/ubuntu/ready marker means user_data's own
+# apt-get install actually succeeded -- observed for real: this AMI's
+# first-boot NVIDIA driver setup can hold the dpkg lock long enough that
+# user_data's apt-get fails with "Could not get lock" underneath it, and
+# (previously) user_data had no set -e, so it touched ready anyway. Re-assert
+# python3-venv is actually installed here, waiting out any dpkg lock first,
+# rather than assuming ready means it worked.
+while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 1; done
+sudo apt-get install -y python3-venv >/dev/null
 # Check for .venv/bin/pip, not just the .venv directory existing -- venv
 # creation makes the directory before running ensurepip, so a run that hit
-# the user_data race (python3-venv not installed yet) leaves a real but
-# broken .venv behind. A bare directory-existence check would skip past it
-# and fail differently and more confusingly, in pip install below.
+# the python3-venv race leaves a real but broken .venv behind. A bare
+# directory-existence check would skip past it and fail differently and
+# more confusingly, in pip install below.
 [ -f .venv/bin/pip ] || { rm -rf .venv; python3 -m venv .venv; }
 source .venv/bin/activate
 pip install -q -r requirements.txt
@@ -506,21 +655,31 @@ for i in "${launch_order[@]}"; do
   ssh_retry 90 launch_node "$node_ip" "$i" || fail_node "$node_ip" "launching"
 done
 
-echo "==> Streaming node 0's $REMOTE_LOG -> $LOCAL_LOG"
+# --node picks which node's log to stream (default 0) -- see the matching
+# check in reattach mode above for why this is worth having at all.
+if [[ "$stream_node" -ge "${#PUBLIC_IPS[@]}" ]]; then
+  echo "Error: --node $stream_node out of range -- only ${#PUBLIC_IPS[@]} node(s) up." >&2
+  exit 1
+fi
+STREAM_IP="${PUBLIC_IPS[$stream_node]}"
+
+echo "==> Streaming node $stream_node's ($STREAM_IP) $REMOTE_LOG -> $LOCAL_LOG"
 echo "    Ctrl-C stops this local stream only -- the remote job keeps running."
 echo "    Reattach any time with:"
-echo "      scripts/run_remote.sh --reattach $run_name"
+echo "      scripts/run_remote.sh --reattach $run_name --node $stream_node"
 echo "    Stop the remote job with (best-effort -- pidfile may point at a"
 echo "    wrapper process; pkill -f the training script name if this doesn't work):"
-echo "      ssh -i $SSH_KEY ubuntu@$IP 'kill \$(cat $REMOTE_PIDFILE)'"
+echo "      ssh -i $SSH_KEY ubuntu@$STREAM_IP 'kill \$(cat $REMOTE_PIDFILE)'"
 echo "    Tear down the instance(s) when you're done (kills any still-running job):"
 echo "      cd terraform && terraform destroy"
-echo "    Results (checkpoints/configs) get pulled automatically when this stream ends."
+echo "    Results (checkpoints/configs) get pulled from every node automatically when this stream ends"
+echo "    (each node -> its own results/nodeN/, including node 0)."
 if [[ "$nodes" -gt 1 ]]; then
-  echo "    Only node 0 is streamed/pulled -- that's where this repo's training loops"
-  echo "    gate prints/file writes (is_main_process()). Other nodes' logs, if you need"
-  echo "    them (e.g. to debug a rendezvous hang), are at the same path on their own IPs:"
-  echo "      ${PUBLIC_IPS[*]:1}"
+  echo "    Only node $stream_node's log is streamed here -- pass --node <i> to watch a"
+  echo "    different one (e.g. whichever one this repo's training loops picked as"
+  echo "    is_main_process()-gated global rank 0). Other nodes' logs are at the same"
+  echo "    path on their own IPs:"
+  echo "      ${PUBLIC_IPS[*]}"
 fi
 echo
 
@@ -530,4 +689,4 @@ echo
 trap pull_results EXIT
 # -n +1, not just -f, so the local log captures everything written from the
 # very start of the run, not just what's written after tail happens to attach.
-$SSH_OPTS "ubuntu@$IP" "tail -f -n +1 '$REMOTE_LOG'" | tee "$LOCAL_LOG"
+$SSH_OPTS "ubuntu@$STREAM_IP" "tail -f -n +1 '$REMOTE_LOG'" | tee "$LOCAL_LOG"

@@ -1,0 +1,51 @@
+{
+  "hardware": {
+    "device": "cuda",
+    "cpu_count": 4,
+    "torch_version": "2.13.0+cu130",
+    "python_version": "3.10.12",
+    "platform": "Linux-6.8.0-1052-aws-x86_64-with-glibc2.35",
+    "hostname": "ip-172-31-40-106",
+    "gpu_name": "Tesla T4",
+    "gpu_count": 1,
+    "gpu_memory_gb": 15.6
+  },
+  "world_size": 1,
+  "backend": "nccl",
+  "config": {
+    "cell_types": null,
+    "n_epochs": 1,
+    "batch_size": 32,
+    "lr": 0.001,
+    "weight_decay": 0.0001,
+    "num_workers": 4,
+    "val_experiments": 2,
+    "sites": [
+      1,
+      2
+    ],
+    "seed": 42,
+    "output_dir": "results/rxrx1",
+    "limit": null,
+    "patience": null,
+    "profile": true
+  },
+  "best_val_accuracy": 0.0032,
+  "timing": {
+    "total_wall_time_s": 7397.3,
+    "total_train_time_s": 6916.7,
+    "total_train_images": 68598,
+    "avg_images_per_s": 9.9,
+    "per_epoch": [
+      {
+        "epoch": 0,
+        "train_loss": 6.9085,
+        "val_loss": 6.6721,
+        "val_accuracy": 0.0032,
+        "elapsed_s": 6916.7,
+        "train_images_per_rank": 68598,
+        "val_images_total": 4432
+      }
+    ]
+  }
+}
