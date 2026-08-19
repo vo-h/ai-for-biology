@@ -8,6 +8,7 @@ A collection of applied ML projects on biological data — starting with the [CZ
 |---|---|---|
 | [Split Strategies](projects/split-strategies.md) | Does cross-donor evaluation actually differ from a random split? | Active |
 | [Multi-Node Training](projects/multi-node-training.md) | Does splitting one epoch of RxRx1 training across 2 single-GPU nodes actually halve wall-clock time, once real DDP communication overhead is accounted for? | Active |
+| [RxRx1 Ablations](projects/rxrx1-ablations.md) | Of the techniques the top Kaggle solutions used on this exact dataset, which ones actually move accuracy? | Planned |
 
 ## Docs & code
 
